@@ -1,5 +1,8 @@
 BOT_TOKEN = '8072115645:AAFJFbStgQlX9cPRB0_Hx4wKKT5WZnrFNRQ'
 
+DISCORD_WEBHOOK_URL = "https://discordapp.com/api/webhooks/1368522950122274826/-YvDAyigkxjv65RcFctcDFb-naw0W2taAQS_DTL_QhuK6VGGFCp4rR0qg07RmIbt6pBW"
+
+
 DATA_FILE = "Bot_data.json"  # Файл для зберігання даних
 
 # Словник для зберігання попереджень користувачів
