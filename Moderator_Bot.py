@@ -154,35 +154,93 @@ async def warn_user(message: Message):
         f"<b>🚧 Попереджень: {current_warnings}/3</b>"
     )
 
-# /bun <причина> [@username|id|reply]
-@dp.message(Command("bun"))
-async def bun_user(message: Message):
+# /ban <час> <причина> [@username|id|reply]
+@dp.message(Command("ban"))
+async def ban_user(message: Message):
     args = message.text.split()
     if message.reply_to_message:
-        reason = " ".join(args[1:]) if len(args) >= 2 else "Без причини"
+        reason = " ".join(args[2:]) if len(args) >= 3 else "Без причини"
         target_user = message.reply_to_message.from_user
     else:
-        if len(args) < 3:
-            await message.reply("<b>❗ Формат: /bun Образа @user або ID або reply</b>")
+        if len(args) < 4:
+            await message.reply("<b>❗ Формат: /ban 3d Образа @user або ID або reply</b>")
             return
-        reason = " ".join(args[1:-1])
+        reason = " ".join(args[2:-1])
         target_user = await resolve_user(message, args)
         if not target_user:
             await message.reply("<b>❗ Не вдалося знайти користувача.</b>")
             return
 
+    duration_str = args[1]
+    time_multiplier = {"m": "minutes", "h": "hours", "d": "days", "w": "weeks"}
+
+    try:
+        unit = duration_str[-1]
+        value = int(duration_str[:-1])
+        if unit not in time_multiplier:
+            raise ValueError
+
+        delta = timedelta(**{time_multiplier[unit]: value})
+        ban_end_time = datetime.now() + delta
+
+        user_id = str(target_user.id)
+        user_name = target_user.full_name
+        admin_name = message.from_user.full_name
+
+        data["banned_users"][user_id] = ban_end_time.isoformat()
+        save_data(data)
+
+        # Запис в історію
+        entry = {
+            "time": datetime.now().strftime("%d.%m.%Y %H:%M:%S"),
+            "admin": admin_name,
+            "user": user_name,
+            "user_id": user_id,
+            "action": "ban",
+            "reason": reason
+        }
+        data["history"].append(entry)
+        save_data(data)
+
+        await message.answer(
+            f"<b>🔒 Адміністратор {admin_name} забанив {user_name}</b>\n"
+            f"<b>⏰ До {ban_end_time.strftime('%d.%m.%Y %H:%M')}</b>\n"
+            f"<b>📌 Причина:</b> {reason}"
+        )
+
+    except ValueError:
+        await message.reply("<b>❗ Формат часу: 2h, 30m, 1d, 1w</b>")
+        
+@dp.message(Command("history"))
+async def history_user(message: Message):
+    args = message.text.split()
+    if message.reply_to_message:
+        target_user = message.reply_to_message.from_user
+    elif len(args) >= 2:
+        target_user = await resolve_user(message, args)
+    else:
+        await message.reply("<b>❗ Використання: /history @user або ID або reply</b>")
+        return
+
     user_id = str(target_user.id)
     user_name = target_user.full_name
-    admin_name = message.from_user.full_name
 
-    data["muted_users"][user_id] = "9999-12-31T23:59:59"
-    data["warnings"][user_id] = 3
-    save_data(data)
+    history = data.get("history", {}).get(user_id, [])
 
-    await message.answer(
-        f"<b>🔒 Адміністратор {admin_name} Заблокував {user_name}</b>\n"
-        f"<b>📌 Причина:</b> {reason}"
-    )
+    if not history:
+        await message.reply(f"<b>📜 У користувача {user_name} ще немає покарань.</b>")
+        return
+
+    text = [f"<b>📜 Історія покарань {user_name}:</b>"]
+    for entry in history:
+        if entry["type"] == "warn":
+            text.append(f"⚠️ Попередження — {entry['reason']} ({entry['date']})")
+        elif entry["type"] == "mute":
+            text.append(f"🔇 Мут до {entry['until']} — {entry['reason']} ({entry['date']})")
+        elif entry["type"] == "ban":
+            text.append(f"🔒 Бан до {entry['until']} — {entry['reason']} ({entry['date']})")
+
+    await message.reply("\n".join(text))
 
 # /unbun [@username|id|reply]
 @dp.message(Command("unbun"))
