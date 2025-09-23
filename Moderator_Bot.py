@@ -22,9 +22,10 @@ import random
 import pandas as pd
 from aiogram import F
 from aiogram.types import CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, Message
+from aiogram.enums.chat_member_status import ChatMemberStatus
 from aiogram.exceptions import TelegramBadRequest
 import os
-
+from typing import Union
 # Налаштування логування
 logging.basicConfig(level=logging.INFO)
 
@@ -66,6 +67,150 @@ async def resolve_user(message: Message, args):
         except:
             return None
     return None
+
+# ----------------- Завантаження FAQ -----------------
+def load_faq():
+    if not os.path.exists(FAQ_FILE):
+        raise FileNotFoundError(f"Файл FAQ не знайдено: {FAQ_FILE}")
+
+    # читаємо Excel
+    df = pd.read_excel(FAQ_FILE)
+
+    # нормалізуємо назви колонок
+    df.columns = [c.strip().lower() for c in df.columns]
+
+    # перевірка обов'язкових колонок
+    if not {"ваше питання", "відповідь"}.issubset(df.columns):
+        raise ValueError("У файлі відсутні колонки 'Ваше питання' або 'Відповідь'")
+
+    # приводимо до тексту і прибираємо зайві пробіли
+    df["ваше питання"] = df["ваше питання"].astype(str).str.strip()
+    df["відповідь"] = df["відповідь"].astype(str).str.strip()
+
+    # фільтруємо пусті рядки
+    df = df[(df["ваше питання"] != "") & (df["відповідь"] != "")]
+
+    # повертаємо список кортежів (питання, відповідь)
+    return list(df[["ваше питання", "відповідь"]].itertuples(index=False, name=None))
+
+# ----------------- Хендлер: список питань -----------------
+@dp.callback_query(lambda c: c.data == "more_questions")
+async def process_more_questions(callback: CallbackQuery):
+    await callback.answer()
+    try:
+        faq_list = load_faq()
+
+        # робимо список кнопок (кожне питання)
+        buttons = [
+            [InlineKeyboardButton(text=f"❓ {q}", callback_data=f"faq_{i+1}")]
+            for i, (q, _) in enumerate(faq_list)
+        ]
+
+        # додаємо кнопку "Назад у головне меню"
+        buttons.append(
+            [InlineKeyboardButton(text="⬅️ Назад у головне меню", callback_data="main_menu")]
+        )
+
+        keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
+
+        await callback.message.edit_text(
+            "<b>📋 Список питань:</b>\n\nОберіть, щоб побачити відповідь 👇",
+            reply_markup=keyboard
+        )
+
+    except Exception as e:
+        await callback.message.edit_text(f"<b>❗ Помилка при завантаженні FAQ:</b> {str(e)}")
+
+
+@dp.callback_query(lambda c: c.data.startswith("faq_"))
+async def show_faq_answer(callback: CallbackQuery):
+    await callback.answer()
+    try:
+        faq_list = load_faq()
+        idx = int(callback.data.split("_")[1]) - 1
+
+        if idx < 0 or idx >= len(faq_list):
+            await callback.message.edit_text("<b>❗ Питання не знайдено.</b>")
+            return
+
+        question, answer = faq_list[idx]
+
+        # Якщо відповідь виглядає як посилання → робимо HTML-лінк
+        if answer.startswith("http://") or answer.startswith("https://"):
+            text = f"<b>❓ {question}</b>\n\n✅ Можна дізнатися: <a href='{answer}'>тут</a>"
+        else:
+            text = f"<b>❓ {question}</b>\n\n✅ {answer}"
+
+        keyboard = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text="⬅️ Назад до списку питань", callback_data="more_questions")]
+            ]
+        )
+
+        await callback.message.edit_text(text, reply_markup=keyboard)
+
+    except Exception as e:
+        await callback.message.edit_text(f"<b>❗ Помилка при завантаженні FAQ:</b> {str(e)}")
+
+# ----------------- Повернення в головне меню -----------------
+@dp.callback_query(lambda c: c.data == "back_help")
+async def back_to_help(callback: CallbackQuery):
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="👑 Як стати на Адмінку", callback_data="become_an_admin"),
+                InlineKeyboardButton(text="❓ Правила", callback_data="chat_rules"),
+            ],
+            [
+                InlineKeyboardButton(text="👮 Мої покарання", callback_data="my_punishments"),
+            ],
+            [
+                InlineKeyboardButton(text="💬 Більше", callback_data="more_questions"),
+            ],
+        ]
+    )
+    await callback.message.edit_text("<b>Що вас цікавить:</b>", reply_markup=keyboard)
+    await callback.answer()
+
+
+@dp.message(Command(commands=["help"]))
+async def open_panel(message: Message):
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="👑 Як стати на Адмінку", callback_data="become_an_admin"),
+                InlineKeyboardButton(text="❓ Правила", callback_data="chat_rules"),
+            ],
+            [
+                InlineKeyboardButton(text="👮 Мої покарання", callback_data="my_punishments"),
+            ],
+            [
+                InlineKeyboardButton(text="💬 Більше", callback_data="more_questions"),
+            ],
+        ]
+    )
+    await message.answer("<b>Що вас цікавить:</b>", reply_markup=keyboard)
+
+
+# ----------------- Хендлер: Як стати адміністратором -----------------
+@dp.callback_query(lambda c: c.data == "become_an_admin")
+async def become_admin(callback: CallbackQuery):
+    google_form_url = "https://forms.gle/FYfZNa3LYrCYtNnd8"
+    text = (
+        "<b>👑 Як стати адміністратором:</b>\n\n"
+        "Подайте заявку через офіційну Google форму:\n"
+        f"<a href='{google_form_url}'>📋 Подати заявку</a>"
+    )
+    await callback.message.answer(text, disable_web_page_preview=True)
+    await callback.answer()
+
+# ----------------- Хендлер: Правила чату -----------------
+@dp.callback_query(lambda c: c.data == "chat_rules")
+async def chat_rules(callback: CallbackQuery):
+    chat_rules_url = ""
+    text = f"<b>❓ Ознайомитися з правилами:</b> <a href='{chat_rules_url}'>✅ Ознайомитися</a>"
+    await callback.message.answer(text, disable_web_page_preview=True)
+    await callback.answer()
 
 @dp.message(AntiMat())
 async def catch_mat(message: Message):
@@ -215,6 +360,57 @@ async def handle_karma(message: Message):
         f"⚖️ Карма користувача {target_user.full_name}: <b>{new_karma}</b>\n"
         f"(Максимум: 1000 | Мінімум: -1000)"
     )
+
+from aiogram.filters import Command
+from aiogram.types import Message
+from aiogram.enums.chat_member_status import ChatMemberStatus
+
+@dp.message(Command(commands=["spec", "spectator"]))
+async def spec_user(message: Message):
+    # Перевірка, що команда відповідає на повідомлення
+    if not message.reply_to_message:
+        await message.reply("❗️ Використай команду у відповідь на повідомлення користувача.")
+        return
+
+    # Перевірка, чи автор команди — адміністратор
+    admin_check = await bot.get_chat_member(message.chat.id, message.from_user.id)
+    if admin_check.status not in [ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.OWNER]:
+        await message.reply("🚫 Лише адміністратори можуть використовувати цю команду.")
+        return
+
+    target_user = message.reply_to_message.from_user
+    user_id = str(target_user.id)
+    user_name = target_user.full_name
+
+    # Визначаємо роль користувача
+    chat_member = await bot.get_chat_member(chat_id=message.chat.id, user_id=target_user.id)
+    status = chat_member.status
+    role = "Адміністратор" if status in ["creator", "administrator"] else "Учасник"
+
+    # Основна інформація
+    info_text = (
+        f"<b>👤 Інформація про користувача:</b>\n"
+        f"📝 Ім'я: {user_name}\n"
+        f"🏷 Статус/Роль: {role}\n"
+        f"🆔 ID: {user_id}\n"
+    )
+
+    # Якщо користувач — учасник, додаємо історію покарань
+    if role == "Учасник":
+        if "history" in data and user_id in data["history"]:
+            punishments = data["history"][user_id]
+            info_text += "\n<b>👮 Історія покарань:</b>\n"
+            for idx, p in enumerate(punishments, start=1):
+                info_text += (
+                    f"{idx}. ⛔️ <b>Тип:</b> {p['type']}\n"
+                    f"   📌 <b>Причина:</b> {p['reason']}\n"
+                    f"   ⏰ <b>Дата:</b> {p['date']}\n"
+                    f"   📅 <b>До:</b> {p.get('until', '—')}\n\n"
+                )
+        else:
+            info_text += "\n✅ Покарань немає."
+
+    await message.reply(info_text)
     
 # ---------------- UNBAN ----------------
 @dp.message(Command("unban"))
@@ -259,7 +455,8 @@ def parse_duration(duration_str: str):
         return num * 86400, f"{num} днів"
     return None, None
 
-# ================= BAN =================
+
+# ----------------- BAN -----------------
 @dp.message(Command("ban"))
 async def ban_user(message: Message, command: CommandObject):
     if not message.reply_to_message:
@@ -278,39 +475,42 @@ async def ban_user(message: Message, command: CommandObject):
     target_user = message.reply_to_message.from_user
     seconds, duration_text = parse_duration(duration_reason)
 
-
-    admin_fullname = message.from_user.full_name
-    admin_name = message.from_user.first_name
-    role = "Адміністратор"
-
     try:
-        # Якщо перманентний бан
-        if seconds is None:
-            until_date = None  # немає дати завершення
-        else:
-            until_date = datetime.now() + timedelta(seconds=seconds)
+        until_date = None if seconds is None else datetime.now() + timedelta(seconds=seconds)
 
-        # Обмеження повідомлень
         await bot.restrict_chat_member(
             chat_id=message.chat.id,
             user_id=target_user.id,
-            permissions=ChatPermissions(
-                can_send_messages=False,
-                can_send_media_messages=False,
-                can_send_other_messages=False,
-                can_add_web_page_previews=False
-            ),
+            permissions=ChatPermissions(can_send_messages=False,
+                                        can_send_media_messages=False,
+                                        can_send_other_messages=False,
+                                        can_add_web_page_previews=False),
             until_date=until_date
         )
 
-        await message.answer(
-            f"⛔ {role} {admin_fullname} заблокував користувача {target_user.full_name} "
-            f"{duration_text if duration_text else 'назавжди'}.\n📋 Причина: {reason}"
-        )
+        await message.answer(f"⛔ Адміністратор {message.from_user.full_name} заблокував {target_user.full_name} "
+                             f"{duration_text if duration_text else 'назавжди'}.\n📋 Причина: {reason}")
+
+        # Логування
+        user_id = str(target_user.id)
+        if "history" not in data:
+            data["history"] = {}
+        if user_id not in data["history"]:
+            data["history"][user_id] = []
+
+        data["history"][user_id].append({
+            "type": "ban",
+            "reason": reason,
+            "date": datetime.now().strftime("%d.%m.%Y %H:%M"),
+            "until": until_date.strftime("%d.%m.%Y %H:%M") if until_date else "Назавжди"
+        })
+        save_data(data)
+
     except Exception as e:
         await message.reply(f"❌ Помилка при бані: {e}")
 
-# ================= MUTE =================
+
+# ----------------- MUTE -----------------
 @dp.message(Command("mute"))
 async def mute_user(message: Message, command: CommandObject):
     if not message.reply_to_message:
@@ -335,12 +535,6 @@ async def mute_user(message: Message, command: CommandObject):
 
     until_date = datetime.now() + timedelta(seconds=seconds)
 
-
-    admin_fullname = message.from_user.full_name
-    admin_name = message.from_user.first_name
-    role = "Адміністратор"
-
-
     try:
         await bot.restrict_chat_member(
             chat_id=message.chat.id,
@@ -348,15 +542,30 @@ async def mute_user(message: Message, command: CommandObject):
             permissions=ChatPermissions(can_send_messages=False),
             until_date=until_date
         )
-        await message.answer(
-            f"🔇 {role} {admin_fullname} видав мут"
-            f"користувачу {target_user.full_name} на {duration_text}.\n📋 Причина: {reason}"
-        )
+
+        await message.answer(f"🔇 Адміністратор {message.from_user.full_name} видав мут "
+                             f"{target_user.full_name} на {duration_text}.\n📋 Причина: {reason}")
+
+        # Логування
+        user_id = str(target_user.id)
+        if "history" not in data:
+            data["history"] = {}
+        if user_id not in data["history"]:
+            data["history"][user_id] = []
+
+        data["history"][user_id].append({
+            "type": "mute",
+            "reason": reason,
+            "date": datetime.now().strftime("%d.%m.%Y %H:%M"),
+            "until": until_date.strftime("%d.%m.%Y %H:%M")
+        })
+        save_data(data)
+
     except Exception as e:
         await message.reply(f"❌ Помилка при муті: {e}")
 
 
-# ---------------- UNMUTE ----------------
+# ----------------- UNMUTE -----------------
 @dp.message(Command("unmute"))
 async def unmute_user(message: Message):
     if not message.reply_to_message:
@@ -365,96 +574,40 @@ async def unmute_user(message: Message):
 
     target_user = message.reply_to_message.from_user
 
-
-    user_id = str(target_user.id)
-    user_name = target_user.full_name
-    admin_fullname = message.from_user.full_name
-    admin_name = message.from_user.first_name
-    role = "Адміністратор"
-
     try:
         await bot.restrict_chat_member(
             chat_id=message.chat.id,
             user_id=target_user.id,
-            permissions=ChatPermissions(
-                can_send_messages=True,
-                can_send_media_messages=True,
-                can_send_other_messages=True,
-                can_add_web_page_previews=True
-            )
+            permissions=ChatPermissions(can_send_messages=True,
+                                        can_send_media_messages=True,
+                                        can_send_other_messages=True,
+                                        can_add_web_page_previews=True)
         )
-        await message.answer(f"🔊 {role} {admin_fullname} зняв мут Користувачу {target_user.full_name}.")
+
+        await message.answer(f"🔊 Адміністратор {message.from_user.full_name} зняв мут {target_user.full_name}.")
+
     except Exception as e:
         await message.answer(f"❌ Помилка при знятті мута: {e}")
- 
-# ====================== /userinfo ======================
-@dp.message(Command("userinfo"), IsAdmin())
-async def history_user(message: Message):
-    args = message.text.split()
-
-    if message.reply_to_message:
-        target_user = message.reply_to_message.from_user
-    elif len(args) >= 2:
-        target_user = await resolve_user(message, args)
-        if not target_user:
-            await message.reply("❗ Не вдалося знайти користувача.")
-            return
-    else:
-        await message.reply("<b>❗ Використання: /userinfo @user або ID або reply</b>")
-        return
-
-    user_id = str(target_user.id)
-    user_name = target_user.full_name
-
-    history = data.get("history", {}).get(user_id, [])
-
-    if not history:
-        await message.reply(f"<b>📜 У користувача {user_name} ще немає покарань.</b>")
-        return
-
-    text = [f"<b>📜 Історія покарань {user_name}:</b>"]
-    for i, entry in enumerate(history, start=1):
-        if entry["type"] == "warn":
-            text.append(f"{i}. ⚠️ Попередження — {entry['reason']} ({entry['date']})")
-        elif entry["type"] == "mute":
-            text.append(f"{i}. 🔇 Мут до {entry['until']} — {entry['reason']} ({entry['date']})")
-        elif entry["type"] == "ban":
-            text.append(f"{i}. 🔒 Бан до {entry['until']} — {entry['reason']} ({entry['date']})")
-        elif entry["type"] == "kick":
-            text.append(f"{i}. 👢 Кік — {entry['reason']} ({entry['date']})")
-
-    await message.reply("\n".join(text))
 
 
-# ====================== /kick ======================
-@dp.message(Command("kick"), IsAdmin())
+# ----------------- KICK -----------------
+@dp.message(Command("kick"))
 async def kick_user(message: Message):
-    args = message.text.split()
+    if not message.reply_to_message:
+        await message.reply("❗ Використай команду у відповідь на повідомлення користувача.")
+        return
 
-    if message.reply_to_message:
-        reason = " ".join(args[1:]) if len(args) > 1 else "Без причини"
-        target_user = message.reply_to_message.from_user
-    else:
-        if len(args) < 3:
-            await message.reply("<b>❗ Формат: /kick Причина @user або ID або reply</b>")
-            return
-        reason = " ".join(args[1:-1])
-        target_user = await resolve_user(message, args)
-        if not target_user:
-            await message.reply("<b>❗ Не вдалося знайти користувача.</b>")
-            return
-
-    user_id = str(target_user.id)
-    user_name = target_user.full_name
-    admin_fullname = message.from_user.full_name
-    role = "Адміністратор"
+    target_user = message.reply_to_message.from_user
+    reason = "Без причини"
 
     try:
-        # бан на 30 сек + розбан = кік
-        await bot.ban_chat_member(chat_id=message.chat.id, user_id=target_user.id, until_date=datetime.now() + timedelta(seconds=30))
+        # кік (бан на 30 сек + розбан)
+        await bot.ban_chat_member(chat_id=message.chat.id, user_id=target_user.id,
+                                  until_date=datetime.now() + timedelta(seconds=30))
         await bot.unban_chat_member(chat_id=message.chat.id, user_id=target_user.id)
 
-        # Лог історії
+        # Логування
+        user_id = str(target_user.id)
         if "history" not in data:
             data["history"] = {}
         if user_id not in data["history"]:
@@ -463,17 +616,67 @@ async def kick_user(message: Message):
         data["history"][user_id].append({
             "type": "kick",
             "reason": reason,
-            "date": datetime.now().strftime("%d.%m.%Y %H:%M")
+            "date": datetime.now().strftime("%d.%m.%Y %H:%M"),
+            "until": "—"
         })
         save_data(data)
 
-        await message.answer(
-            f"<b>👢 {role} {admin_fullname} Від’єднав користувача {user_name}</b>\n"
-            f"<b>📌 Причина:</b> {reason}"
-        )
+        await message.answer(f"👢 Адміністратор {message.from_user.full_name} від’єднав {target_user.full_name}.\n📌 Причина: {reason}")
 
     except Exception as e:
-        await message.reply(f"<b>❗ Помилка при виконанні кіку: {e}</b>")
+        await message.reply(f"❌ Помилка при виконанні кіку: {e}")
+
+
+# ----------------- WARN -----------------
+@dp.message(Command("warn"))
+async def warn_user(message: Message, command: CommandObject):
+    if not message.reply_to_message:
+        await message.reply("❗ Використай команду у відповідь на повідомлення користувача.")
+        return
+
+    target_user = message.reply_to_message.from_user
+    reason = command.args if command.args else "Без причини"
+
+    # Логування
+    user_id = str(target_user.id)
+    if "history" not in data:
+        data["history"] = {}
+    if user_id not in data["history"]:
+        data["history"][user_id] = []
+
+    data["history"][user_id].append({
+        "type": "warn",
+        "reason": reason,
+        "date": datetime.now().strftime("%d.%m.%Y %H:%M"),
+        "until": "—"
+    })
+    save_data(data)
+
+    await message.answer(f"⚠️ Адміністратор {message.from_user.full_name} попередив {target_user.full_name}.\n📝 Причина: {reason}")
+
+
+# ----------------- Хендлер: Мої покарання -----------------
+async def show_punishments(message_or_callback):
+    user_id = str(message_or_callback.from_user.id)
+
+    if "history" in data and user_id in data["history"]:
+        punishments = data["history"][user_id]
+        text = "<b>👮 Ваші покарання:</b>\n\n"
+        for p in punishments:
+            text += (
+                f"⛔ <b>Тип:</b> {p['type']}\n"
+                f"📌 <b>Причина:</b> {p['reason']}\n"
+                f"⏰ <b>Дата:</b> {p['date']}\n"
+                f"📅 <b>До:</b> {p.get('until', '—')}\n\n"
+            )
+    else:
+        text = "<b>✅ У вас немає покарань!</b>"
+
+    if isinstance(message_or_callback, CallbackQuery):
+        await message_or_callback.message.answer(text)
+        await message_or_callback.answer()
+    else:
+        await message_or_callback.answer(text)
 
 
 # ====================== /warn ======================
@@ -554,25 +757,6 @@ async def unwarn_user(message: Message):
 
     await message.reply(f"<b>❗ У користувача {user_name} немає попереджень для зняття.</b>")
     
-@dp.message(Command(commands=["help"]))
-async def open_panel(message: Message):
-    keyboard = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(text="👑 Як стати на Адмінку", callback_data="become_an_admin"),
-                InlineKeyboardButton(text="❓ Правила", callback_data="chat_rules"),
-            ],
-            [
-                InlineKeyboardButton(text="👮 Мої покарання", callback_data="my_punishments"),
-            ],
-            [
-                InlineKeyboardButton(text="💬 Більше", callback_data="more_questions"),
-            ],
-        ]
-    )
-    await message.answer("<b>Що вас цікавить:</b>", reply_markup=keyboard)
-
-
 # /report <причина> (reply або просто)
 @dp.message(Command("report"))
 async def report_user(message: Message):
