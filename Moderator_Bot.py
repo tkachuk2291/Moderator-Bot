@@ -314,7 +314,49 @@ def parse_duration(duration_str: str):
         return datetime.now() + timedelta(days=value)
     else:
         raise ValueError("❗ Невірна одиниця часу. Використовуйте m (хвилини), h (години), d (дні).")
-\
+
+@dp.message(Command("spec", "spectator"), IsAdmin())
+async def spec_user(message: Message):
+    # Перевірка, що команда відповідає на повідомлення
+    if not message.reply_to_message:
+        await message.reply("❗ Використай команду у відповідь на повідомлення користувача.")
+        return
+
+    target_user = message.reply_to_message.from_user
+    user_id = str(target_user.id)
+    user_name = target_user.full_name
+
+    # Визначаємо роль користувача
+    chat_member = await bot.get_chat_member(chat_id=message.chat.id, user_id=target_user.id)
+    status = chat_member.status  # creator, administrator, member, restricted, left, kicked
+    role = "Адміністратор" if status in ["creator", "administrator"] else "Учасник"
+
+    # Основна інформація
+    info_text = (
+        f"<b>👤 Інформація про користувача:</b>\n"
+        f"📝 Ім'я: {user_name}\n"
+        f"🏷 Статус/Роль: {role}\n"
+        f"🆔 ID: {user_id}\n"
+    )
+
+    # Якщо користувач — учасник, додаємо історію покарань
+    if role == "Учасник":
+        if "history" in data and user_id in data["history"]:
+            punishments = data["history"][user_id]
+            info_text += "\n<b>👮 Історія покарань:</b>\n"
+            for idx, p in enumerate(punishments, start=1):
+                info_text += (
+                    f"{idx}. ⛔ <b>Тип:</b> {p['type']}\n"
+                    f"   📌 <b>Причина:</b> {p['reason']}\n"
+                    f"   ⏰ <b>Дата:</b> {p['date']}\n"
+                    f"   📅 <b>До:</b> {p.get('until', '—')}\n\n"
+                )
+        else:
+            info_text += "\n✅ Покарань немає."
+
+    await message.reply(info_text)
+
+
     # =================== КАРМА ===================
 # Структура: data["karma"] = {user_id: число}
 if "karma" not in data:
@@ -360,57 +402,6 @@ async def handle_karma(message: Message):
         f"⚖️ Карма користувача {target_user.full_name}: <b>{new_karma}</b>\n"
         f"(Максимум: 1000 | Мінімум: -1000)"
     )
-
-from aiogram.filters import Command
-from aiogram.types import Message
-from aiogram.enums.chat_member_status import ChatMemberStatus
-
-@dp.message(Command(commands=["spec", "spectator"]))
-async def spec_user(message: Message):
-    # Перевірка, що команда відповідає на повідомлення
-    if not message.reply_to_message:
-        await message.reply("❗️ Використай команду у відповідь на повідомлення користувача.")
-        return
-
-    # Перевірка, чи автор команди — адміністратор
-    admin_check = await bot.get_chat_member(message.chat.id, message.from_user.id)
-    if admin_check.status not in [ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.OWNER]:
-        await message.reply("🚫 Лише адміністратори можуть використовувати цю команду.")
-        return
-
-    target_user = message.reply_to_message.from_user
-    user_id = str(target_user.id)
-    user_name = target_user.full_name
-
-    # Визначаємо роль користувача
-    chat_member = await bot.get_chat_member(chat_id=message.chat.id, user_id=target_user.id)
-    status = chat_member.status
-    role = "Адміністратор" if status in ["creator", "administrator"] else "Учасник"
-
-    # Основна інформація
-    info_text = (
-        f"<b>👤 Інформація про користувача:</b>\n"
-        f"📝 Ім'я: {user_name}\n"
-        f"🏷 Статус/Роль: {role}\n"
-        f"🆔 ID: {user_id}\n"
-    )
-
-    # Якщо користувач — учасник, додаємо історію покарань
-    if role == "Учасник":
-        if "history" in data and user_id in data["history"]:
-            punishments = data["history"][user_id]
-            info_text += "\n<b>👮 Історія покарань:</b>\n"
-            for idx, p in enumerate(punishments, start=1):
-                info_text += (
-                    f"{idx}. ⛔️ <b>Тип:</b> {p['type']}\n"
-                    f"   📌 <b>Причина:</b> {p['reason']}\n"
-                    f"   ⏰ <b>Дата:</b> {p['date']}\n"
-                    f"   📅 <b>До:</b> {p.get('until', '—')}\n\n"
-                )
-        else:
-            info_text += "\n✅ Покарань немає."
-
-    await message.reply(info_text)
     
 # ---------------- UNBAN ----------------
 @dp.message(Command("unban"))
