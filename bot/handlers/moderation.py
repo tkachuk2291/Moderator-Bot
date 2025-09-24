@@ -2,7 +2,7 @@ import asyncio
 from datetime import datetime, timedelta
 from typing import Optional
 
-from aiogram import F, Router
+from aiogram import F, Router, Bot
 from aiogram.enums import ParseMode
 from aiogram.filters import Command
 from aiogram.types import ChatPermissions, Message
@@ -79,7 +79,7 @@ async def spec_user(message: Message, bot: Bot):
 
 
 @moderation_router.message(Command("unban"))
-async def unban_user(message: Message):
+async def unban_user(message: Message, bot: Bot):
     if not message.reply_to_message:
         await message.reply("❗ Використай команду у відповідь на повідомлення користувача.")
         return
@@ -87,7 +87,7 @@ async def unban_user(message: Message):
     admin_fullname = message.from_user.full_name
     role = "Адміністратор"
     try:
-        await message.bot.unban_chat_member(
+        await bot.unban_chat_member(
             chat_id=message.chat.id,
             user_id=target_user.id,
             only_if_banned=True,
@@ -98,7 +98,7 @@ async def unban_user(message: Message):
 
 
 @moderation_router.message(Command("ban"))
-async def ban_user(message: Message, command: CommandObject):
+async def ban_user(message: Message, command: CommandObject, bot: Bot):
     if not message.reply_to_message:
         await message.reply("❗ Використай: /ban <час або перманентний>, причина (у відповідь на повідомлення)")
         return
@@ -113,7 +113,7 @@ async def ban_user(message: Message, command: CommandObject):
     seconds, duration_text = parse_duration_to_seconds(duration_reason)
     try:
         until_date = None if seconds is None else datetime.now() + timedelta(seconds=seconds)
-        await message.bot.restrict_chat_member(
+        await bot.restrict_chat_member(
             chat_id=message.chat.id,
             user_id=target_user.id,
             permissions=ChatPermissions(
@@ -142,7 +142,7 @@ async def ban_user(message: Message, command: CommandObject):
 
 
 @moderation_router.message(Command("mute"))
-async def mute_user(message: Message, command: CommandObject):
+async def mute_user(message: Message, command: CommandObject, bot: Bot):
     if not message.reply_to_message:
         await message.reply("❗ Використай: /mute <час>, причина (у відповідь на повідомлення)")
         return
@@ -160,7 +160,7 @@ async def mute_user(message: Message, command: CommandObject):
         return
     until_date = datetime.now() + timedelta(seconds=seconds)
     try:
-        await message.bot.restrict_chat_member(
+        await bot.restrict_chat_member(
             chat_id=message.chat.id,
             user_id=target_user.id,
             permissions=ChatPermissions(can_send_messages=False),
@@ -179,19 +179,19 @@ async def mute_user(message: Message, command: CommandObject):
                 until=until_date.strftime("%d.%m.%Y %H:%M"),
             ),
         )
-        store.set_mute(message.chat.id, target_user.id, until_date)
+        # No local mute tracking; rely on Telegram until_date
     except Exception as e:
         await message.reply(f"❌ Помилка при муті: {e}")
 
 
 @moderation_router.message(Command("unmute"))
-async def unmute_user(message: Message):
+async def unmute_user(message: Message, bot: Bot):
     if not message.reply_to_message:
         await message.reply("❗ Використай команду у відповідь на повідомлення користувача.")
         return
     target_user = message.reply_to_message.from_user
     try:
-        await message.bot.restrict_chat_member(
+        await bot.restrict_chat_member(
             chat_id=message.chat.id,
             user_id=target_user.id,
             permissions=ChatPermissions(
@@ -202,25 +202,25 @@ async def unmute_user(message: Message):
             ),
         )
         await message.answer(f"🔊 Адміністратор {message.from_user.full_name} зняв мут {target_user.full_name}.")
-        store.clear_mute(target_user.id)
+        # No local mute tracking to clear
     except Exception as e:
         await message.answer(f"❌ Помилка при знятті мута: {e}")
 
 
 @moderation_router.message(Command("kick"))
-async def kick_user(message: Message):
+async def kick_user(message: Message, bot: Bot):
     if not message.reply_to_message:
         await message.reply("❗ Використай команду у відповідь на повідомлення користувача.")
         return
     target_user = message.reply_to_message.from_user
     reason = "Без причини"
     try:
-        await message.bot.ban_chat_member(
+        await bot.ban_chat_member(
             chat_id=message.chat.id,
             user_id=target_user.id,
             until_date=datetime.now() + timedelta(seconds=30),
         )
-        await message.bot.unban_chat_member(chat_id=message.chat.id, user_id=target_user.id)
+        await bot.unban_chat_member(chat_id=message.chat.id, user_id=target_user.id)
         store.append_history(
             target_user.id,
             HistoryEntry(
