@@ -17,6 +17,10 @@ class Settings(BaseSettings):
     CHAT_RULES_URL: str = ""
     ADMIN_APPLICATION_URL: str = "https://forms.gle/FYfZNa3LYrCYtNnd8"
 
+    # AntiMat settings
+    ANTI_MAT_USE_FUZZY: bool = True
+    BAD_FUZZY_THRESHOLD: int = 85
+
 
 settings = Settings()
 
@@ -28,6 +32,8 @@ BAD_WORDS_FILE: str = settings.BAD_WORDS_FILE
 ANTI_BEGGER_FILE: str = settings.ANTI_BEGGER_FILE
 CHAT_RULES_URL: str = settings.CHAT_RULES_URL
 ADMIN_APPLICATION_URL: str = settings.ADMIN_APPLICATION_URL
+ANTI_MAT_USE_FUZZY: bool = settings.ANTI_MAT_USE_FUZZY
+BAD_FUZZY_THRESHOLD: int = settings.BAD_FUZZY_THRESHOLD
 
 
 # Symbol restoration tables (ukr <-> lat/symbols)
