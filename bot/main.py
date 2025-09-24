@@ -7,8 +7,7 @@ from aiogram.client.default import DefaultBotProperties
 
 from .config import BOT_TOKEN
 from .handlers import help_router, moderation_router, report_router, karma_router
-from .tasks.check_unmute import check_unmute
-from .data_store import DataStore
+from .handlers.text_moderation import text_moderation_router
 
 
 async def main() -> None:
@@ -17,6 +16,7 @@ async def main() -> None:
     dp = Dispatcher()
 
     dp.include_router(help_router)
+    dp.include_router(text_moderation_router)
     dp.include_router(moderation_router)
     dp.include_router(report_router)
     dp.include_router(karma_router)
@@ -26,8 +26,7 @@ async def main() -> None:
     except Exception:
         pass
 
-    store = DataStore()
-    asyncio.create_task(check_unmute(bot, store))
+    # Background unmute task removed; rely on Telegram until_date
 
     await dp.start_polling(bot)
 

@@ -1,44 +1,37 @@
 import os
 from typing import Dict, List
-
-# Optional fallback to legacy Bot_config for local runs
-try:
-    from Bot_config import (  # type: ignore
-        BOT_TOKEN as LEGACY_BOT_TOKEN,
-        DISCORD_WEBHOOK_URL as LEGACY_DISCORD_WEBHOOK_URL,
-        DATA_FILE as LEGACY_DATA_FILE,
-        FAQ_FILE as LEGACY_FAQ_FILE,
-        letters_rest_table as LEGACY_LETTERS_TABLE,
-        special_symbols_map as LEGACY_SYMBOL_MAP,
-    )
-except Exception:  # pragma: no cover - optional fallback
-    LEGACY_BOT_TOKEN = ""
-    LEGACY_DISCORD_WEBHOOK_URL = ""
-    LEGACY_DATA_FILE = "Bot_data.json"
-    LEGACY_FAQ_FILE = "faq.xlsx"
-    LEGACY_LETTERS_TABLE = {}
-    LEGACY_SYMBOL_MAP = {}
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-BOT_TOKEN: str = os.getenv("BOT_TOKEN", LEGACY_BOT_TOKEN)
-DISCORD_WEBHOOK_URL: str = os.getenv("DISCORD_WEBHOOK_URL", LEGACY_DISCORD_WEBHOOK_URL)
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
-# Files
-DATA_FILE: str = os.getenv("DATA_FILE", LEGACY_DATA_FILE or "Bot_data.json")
-FAQ_FILE: str = os.getenv("FAQ_FILE", LEGACY_FAQ_FILE or "faq.xlsx")
-BAD_WORDS_FILE: str = os.getenv("BAD_WORDS_FILE", "bad_words.txt")
-ANTI_BEGGER_FILE: str = os.getenv("ANTI_BEGGER_FILE", "AntiBegger_list.txt")
+    BOT_TOKEN: str
+    DISCORD_WEBHOOK_URL: str = ""
 
-# Optional URLs
-CHAT_RULES_URL: str = os.getenv("CHAT_RULES_URL", "")
-ADMIN_APPLICATION_URL: str = os.getenv("ADMIN_APPLICATION_URL", "https://forms.gle/FYfZNa3LYrCYtNnd8")
+    DATA_FILE: str = "Bot_data.json"
+    FAQ_FILE: str = "faq.xlsx"
+    BAD_WORDS_FILE: str = "bad_words.txt"
+    ANTI_BEGGER_FILE: str = "AntiBegger_list.txt"
+
+    CHAT_RULES_URL: str = ""
+    ADMIN_APPLICATION_URL: str = "https://forms.gle/FYfZNa3LYrCYtNnd8"
+
+
+settings = Settings()
+
+BOT_TOKEN: str = settings.BOT_TOKEN
+DISCORD_WEBHOOK_URL: str = settings.DISCORD_WEBHOOK_URL
+DATA_FILE: str = settings.DATA_FILE
+FAQ_FILE: str = settings.FAQ_FILE
+BAD_WORDS_FILE: str = settings.BAD_WORDS_FILE
+ANTI_BEGGER_FILE: str = settings.ANTI_BEGGER_FILE
+CHAT_RULES_URL: str = settings.CHAT_RULES_URL
+ADMIN_APPLICATION_URL: str = settings.ADMIN_APPLICATION_URL
 
 
 # Symbol restoration tables (ukr <-> lat/symbols)
-letters_rest_table: Dict[str, List[str]] = (
-    LEGACY_LETTERS_TABLE
-    if LEGACY_LETTERS_TABLE
-    else {
+letters_rest_table: Dict[str, List[str]] = {
         'а': ['a', '@', '4'],
         'б': ['b', '6'],
         'в': ['v', 'w'],
@@ -72,13 +65,9 @@ letters_rest_table: Dict[str, List[str]] = (
         'ь': ["'", "`"],
         'ю': ['yu', 'ju', 'u'],
         'я': ['ya', 'ja'],
-    }
-)
+}
 
-special_symbols_map: Dict[str, str] = (
-    LEGACY_SYMBOL_MAP
-    if LEGACY_SYMBOL_MAP
-    else {
+special_symbols_map: Dict[str, str] = {
         '@': 'а',
         '!': 'і',
         '1': 'і',
@@ -89,10 +78,5 @@ special_symbols_map: Dict[str, str] = (
         '*': '',
         '-': '',
         '_': '',
-    }
-)
-
-
-# Simple in-memory cooldown state for /report
-last_report_time: Dict[str, "datetime"] = {}
+}
 

@@ -4,36 +4,19 @@ from typing import Optional, Tuple
 
 
 def parse_args(text: str) -> tuple[Optional[int], str]:
+    """Deprecated: use specific duration parsers in handlers."""
     if not text:
         return None, "Без причини"
-    parts = text.split(",", 1)
-    time_part = parts[0].strip().lower()
-    reason = parts[1].strip() if len(parts) > 1 else None
-    if reason is None and not re.match(r"^\d+[mhd]$|^перманентний$", time_part):
-        return None, time_part
-    if time_part == "перманентний":
-        return 0, reason or "Без причини"
-    match = re.match(r"^(\d+)([mhd])$", time_part)
-    if match:
-        value, unit = int(match.group(1)), match.group(2)
-        minutes = 0
-        if unit == "m":
-            minutes = value
-        elif unit == "d":
-            minutes = value * 60 * 24
-        return minutes, reason or "Без причини"
     return None, text.strip()
 
 
 def parse_duration_to_datetime(duration_str: str) -> Optional[datetime]:
+    """Deprecated: use seconds parser or directly pass until to API."""
     duration_str = duration_str.strip().lower()
     if duration_str in ["перманентний", "permanent", "perm"]:
         return None
     unit = duration_str[-1]
-    try:
-        value = int(duration_str[:-1])
-    except ValueError:
-        raise ValueError("❗ Невірний формат часу. Використовуйте: 30m, 2h, 7d, перманентний")
+    value = int(duration_str[:-1])
     if unit == "m":
         return datetime.now() + timedelta(minutes=value)
     elif unit == "h":
@@ -41,7 +24,7 @@ def parse_duration_to_datetime(duration_str: str) -> Optional[datetime]:
     elif unit == "d":
         return datetime.now() + timedelta(days=value)
     else:
-        raise ValueError("❗ Невірна одиниця часу. Використовуйте m/h/d.")
+        return None
 
 
 def parse_duration_to_seconds(duration_str: str) -> tuple[Optional[int], Optional[str]]:

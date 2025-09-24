@@ -5,7 +5,10 @@ from aiogram import Router
 from aiogram.filters import Command
 from aiogram.types import Message
 
-from ..config import DISCORD_WEBHOOK_URL, last_report_time
+from ..config import DISCORD_WEBHOOK_URL
+
+# Simple in-memory cooldown state
+last_report_time = {}
 
 
 report_router = Router()

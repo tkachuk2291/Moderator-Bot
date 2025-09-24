@@ -8,8 +8,8 @@ from aiogram.filters import Command
 from aiogram.types import ChatPermissions, Message
 from aiogram.filters.command import CommandObject
 
-from ..filters import IsAdmin, AntiMat, AntiBegger
-from ..data_store import DataStore
+from ..filters import IsAdmin
+from ..data_store import DataStore, HistoryEntry
 from ..utils.parse import parse_duration_to_seconds
 
 
@@ -17,19 +17,7 @@ moderation_router = Router()
 store = DataStore()
 
 
-@moderation_router.message(AntiMat())
-async def catch_mat(message: Message):
-    await message.delete()
-    warn_text = (
-        f"🚫 <b>{message.from_user.full_name}</b>, "
-        "ваше повідомлення містило ненормативну лексику і було видалено."
-    )
-    await message.answer(warn_text, parse_mode=ParseMode.HTML)
-
-
-@moderation_router.message(AntiBegger())
-async def block_begging(message: Message):
-    await message.delete()
+# text moderation handlers moved to text_moderation_router
 
 
 @moderation_router.message(Command("replyreport"), IsAdmin())
@@ -55,14 +43,17 @@ async def reply_report(message: Message):
 
 
 @moderation_router.message(Command("spec", "spectator"), IsAdmin())
-async def spec_user(message: Message):
+from aiogram import Bot
+
+
+async def spec_user(message: Message, bot: Bot):
     if not message.reply_to_message:
         await message.reply("❗ Використай команду у відповідь на повідомлення користувача.")
         return
     target_user = message.reply_to_message.from_user
     user_id = str(target_user.id)
     user_name = target_user.full_name
-    chat_member = await message.bot.get_chat_member(chat_id=message.chat.id, user_id=target_user.id)
+    chat_member = await bot.get_chat_member(chat_id=message.chat.id, user_id=target_user.id)
     status = chat_member.status
     role = "Адміністратор" if status in ["creator", "administrator"] else "Учасник"
     info_text = (
@@ -139,12 +130,12 @@ async def ban_user(message: Message, command: CommandObject):
         )
         store.append_history(
             target_user.id,
-            {
-                "type": "ban",
-                "reason": reason,
-                "date": datetime.now().strftime("%d.%m.%Y %H:%M"),
-                "until": until_date.strftime("%d.%m.%Y %H:%M") if until_date else "Назавжди",
-            },
+            HistoryEntry(
+                type="ban",
+                reason=reason,
+                date=datetime.now().strftime("%d.%m.%Y %H:%M"),
+                until=until_date.strftime("%d.%m.%Y %H:%M") if until_date else "Назавжди",
+            ),
         )
     except Exception as e:
         await message.reply(f"❌ Помилка при бані: {e}")
@@ -181,12 +172,12 @@ async def mute_user(message: Message, command: CommandObject):
         )
         store.append_history(
             target_user.id,
-            {
-                "type": "mute",
-                "reason": reason,
-                "date": datetime.now().strftime("%d.%m.%Y %H:%M"),
-                "until": until_date.strftime("%d.%m.%Y %H:%M"),
-            },
+            HistoryEntry(
+                type="mute",
+                reason=reason,
+                date=datetime.now().strftime("%d.%m.%Y %H:%M"),
+                until=until_date.strftime("%d.%m.%Y %H:%M"),
+            ),
         )
         store.set_mute(message.chat.id, target_user.id, until_date)
     except Exception as e:
@@ -232,12 +223,12 @@ async def kick_user(message: Message):
         await message.bot.unban_chat_member(chat_id=message.chat.id, user_id=target_user.id)
         store.append_history(
             target_user.id,
-            {
-                "type": "kick",
-                "reason": reason,
-                "date": datetime.now().strftime("%d.%m.%Y %H:%M"),
-                "until": "—",
-            },
+            HistoryEntry(
+                type="kick",
+                reason=reason,
+                date=datetime.now().strftime("%d.%m.%Y %H:%M"),
+                until="—",
+            ),
         )
         await message.answer(
             f"👢 Адміністратор {message.from_user.full_name} від’єднав {target_user.full_name}.\n📌 Причина: {reason}"
@@ -255,12 +246,12 @@ async def warn_user(message: Message, command: CommandObject):
     reason = command.args if command.args else "Без причини"
     store.append_history(
         target_user.id,
-        {
-            "type": "warn",
-            "reason": reason,
-            "date": datetime.now().strftime("%d.%m.%Y %H:%M"),
-            "until": "—",
-        },
+        HistoryEntry(
+            type="warn",
+            reason=reason,
+            date=datetime.now().strftime("%d.%m.%Y %H:%M"),
+            until="—",
+        ),
     )
     await message.answer(
         f"⚠️ Адміністратор {message.from_user.full_name} попередив {target_user.full_name}.\n📝 Причина: {reason}"
@@ -279,18 +270,11 @@ async def unwarn_user(message: Message):
     else:
         await message.reply("<b>❗ Формат: /unwarn (у відповідь на повідомлення)</b>")
         return
-    user_id = str(target_user.id)
-    history = store.data.get("history", {}).get(user_id, [])
-    if not history:
-        await message.reply(f"<b>❗ У користувача {target_user.full_name} немає попереджень.</b>")
-        return
-    for i in range(len(history) - 1, -1, -1):
-        if history[i].get("type") == "warn":
-            history.pop(i)
-            store.save()
-            await message.answer(
-                f"✅ Адміністратор {message.from_user.full_name} зняв попередження у {target_user.full_name}.\n"
-            )
-            return
-    await message.reply(f"<b>❗ У користувача {target_user.full_name} немає попереджень для зняття.</b>")
+    removed = store.pop_last_warn(target_user.id)
+    if removed:
+        await message.answer(
+            f"✅ Адміністратор {message.from_user.full_name} зняв попередження у {target_user.full_name}.\n"
+        )
+    else:
+        await message.reply(f"<b>❗ У користувача {target_user.full_name} немає попереджень для зняття.</b>")
 
