@@ -35,7 +35,7 @@ async def handle_karma(message: Message):
 @karma_router.callback_query(lambda c: c.data == "my_punishments")
 async def show_punishments(callback):
     user_id = str(callback.from_user.id)
-    punishments = store.data.get("history", {}).get(user_id, [])
+    punishments = store.get_history(int(user_id))
     if punishments:
         text = "<b>👮 Ваші покарання:</b>\n\n"
         for p in punishments:
