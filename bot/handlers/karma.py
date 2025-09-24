@@ -1,28 +1,26 @@
-from aiogram import Router
-from aiogram.types import Message
+from aiogram import Router, F
+from aiogram.types import Message, CallbackQuery
 
 from ..data_store import DataStore
 
 
 karma_router = Router()
-store = DataStore()
 
 
-@karma_router.message()
-async def handle_karma(message: Message):
+@karma_router.message(~F.text.startswith("/"))
+async def handle_karma(message: Message, store: DataStore):
     if not message.reply_to_message:
         return
     target_user = message.reply_to_message.from_user
-    user_id = str(target_user.id)
     text = (message.text or "").strip()
     if not text:
         return
     if text.isdigit() or (text.startswith("+") and text[1:].isdigit()):
         value = int(text.replace("+", ""))
-        new_karma = min(1000, store.get_karma(target_user.id) + value)
+        new_karma = store.add_karma(target_user.id, value)
     elif text.startswith("-") and text[1:].isdigit():
         value = int(text)
-        new_karma = max(-1000, store.get_karma(target_user.id) + value)
+        new_karma = store.add_karma(target_user.id, value)
     else:
         return
     store.set_karma(target_user.id, new_karma)
@@ -32,18 +30,18 @@ async def handle_karma(message: Message):
     )
 
 
-@karma_router.callback_query(lambda c: c.data == "my_punishments")
-async def show_punishments(callback):
-    user_id = str(callback.from_user.id)
-    punishments = store.get_history(int(user_id))
+@karma_router.callback_query(F.data == "my_punishments")
+async def show_punishments(callback: CallbackQuery, store: DataStore):
+    user_id = callback.from_user.id
+    punishments = store.get_history(user_id)
     if punishments:
         text = "<b>👮 Ваші покарання:</b>\n\n"
         for p in punishments:
             text += (
-                f"⛔ <b>Тип:</b> {p.get('type','')}\n"
-                f"📌 <b>Причина:</b> {p.get('reason','')}\n"
-                f"⏰ <b>Дата:</b> {p.get('date','')}\n"
-                f"📅 <b>До:</b> {p.get('until','—')}\n\n"
+                f"⛔ <b>Тип:</b> {p.type}\n"
+                f"📌 <b>Причина:</b> {p.reason}\n"
+                f"⏰ <b>Дата:</b> {p.date}\n"
+                f"📅 <b>До:</b> {p.until or '—'}\n\n"
             )
     else:
         text = "<b>✅ У вас немає покарань!</b>"

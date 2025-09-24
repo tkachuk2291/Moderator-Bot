@@ -2,7 +2,7 @@ import os
 from typing import List, Tuple
 
 import pandas as pd
-from aiogram import Router
+from aiogram import Router, F
 from aiogram.filters import Command
 from aiogram.types import CallbackQuery, Message
 
@@ -31,13 +31,13 @@ async def open_panel(message: Message):
     await message.answer("<b>Що вас цікавить:</b>", reply_markup=main_menu_kb())
 
 
-@help_router.callback_query(lambda c: c.data == "back_help")
+@help_router.callback_query(F.data == "back_help")
 async def back_to_help(callback: CallbackQuery):
     await callback.message.edit_text("<b>Що вас цікавить:</b>", reply_markup=back_to_help_kb())
     await callback.answer()
 
 
-@help_router.callback_query(lambda c: c.data == "become_an_admin")
+@help_router.callback_query(F.data == "become_an_admin")
 async def become_admin(callback: CallbackQuery):
     text = (
         "<b>👑 Як стати адміністратором:</b>\n\n"
@@ -48,20 +48,20 @@ async def become_admin(callback: CallbackQuery):
     await callback.answer()
 
 
-@help_router.callback_query(lambda c: c.data == "chat_rules")
+@help_router.callback_query(F.data == "chat_rules")
 async def chat_rules(callback: CallbackQuery):
     text = f"<b>❓ Ознайомитися з правилами:</b> <a href='{CHAT_RULES_URL}'>✅ Ознайомитися</a>"
     await callback.message.answer(text, disable_web_page_preview=True)
     await callback.answer()
 
 
-@help_router.callback_query(lambda c: c.data == "main_menu")
+@help_router.callback_query(F.data == "main_menu")
 async def go_main_menu(callback: CallbackQuery):
     await callback.message.edit_text("<b>Що вас цікавить:</b>", reply_markup=main_menu_kb())
     await callback.answer()
 
 
-@help_router.callback_query(lambda c: c.data == "more_questions")
+@help_router.callback_query(F.data == "more_questions")
 async def process_more_questions(callback: CallbackQuery):
     await callback.answer()
     try:
@@ -75,7 +75,7 @@ async def process_more_questions(callback: CallbackQuery):
         await callback.message.edit_text(f"<b>❗ Помилка при завантаженні FAQ:</b> {str(e)}")
 
 
-@help_router.callback_query(lambda c: c.data.startswith("faq_"))
+@help_router.callback_query(F.data.startswith("faq_"))
 async def show_faq_answer(callback: CallbackQuery):
     await callback.answer()
     try:

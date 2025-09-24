@@ -8,6 +8,8 @@ from aiogram.client.default import DefaultBotProperties
 from .config import BOT_TOKEN
 from .handlers import help_router, moderation_router, report_router, karma_router
 from .handlers.text_moderation import text_moderation_router
+from .middlewares import StoreMiddleware
+from .data_store import DataStore
 
 
 async def main() -> None:
@@ -26,7 +28,9 @@ async def main() -> None:
     except Exception:
         pass
 
-    # Background unmute task removed; rely on Telegram until_date
+    # Inject shared DataStore via middleware
+    store = DataStore()
+    dp.update.outer_middleware(StoreMiddleware(store))
 
     await dp.start_polling(bot)
 

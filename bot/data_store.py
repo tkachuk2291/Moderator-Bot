@@ -66,8 +66,19 @@ class DataStore:
                 return True
         return False
 
-    def get_history(self, user_id: int) -> List[Dict[str, Any]]:
-        return self.data.get("history", {}).get(str(user_id), [])
+    def get_history(self, user_id: int) -> List[HistoryEntry]:
+        raw = self.data.get("history", {}).get(str(user_id), [])
+        result: List[HistoryEntry] = []
+        for item in raw:
+            result.append(
+                HistoryEntry(
+                    type=item.get("type", ""),
+                    reason=item.get("reason", ""),
+                    date=item.get("date", ""),
+                    until=item.get("until"),
+                )
+            )
+        return result
 
     # Karma
     def get_karma(self, user_id: int, is_admin: bool = False) -> int:
@@ -82,5 +93,10 @@ class DataStore:
         self.data.setdefault("karma", {})[uid] = value
         self.save()
         return value
+
+    def add_karma(self, user_id: int, delta: int) -> int:
+        current = self.get_karma(user_id)
+        new_val = max(-1000, min(1000, current + delta))
+        return self.set_karma(user_id, new_val)
 
 
