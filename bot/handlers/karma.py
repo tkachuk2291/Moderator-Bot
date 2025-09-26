@@ -7,8 +7,8 @@ from ..data_store import DataStore
 karma_router = Router()
 
 
-@karma_router.message(~F.text.startswith("/"))
-async def handle_karma(message: Message, store: DataStore):
+@karma_router.message(F.text.startswith("+"), F.reply_to_message)
+async def handle_karma_plus(message: Message, store: DataStore):
     if not message.reply_to_message:
         return
     target_user = message.reply_to_message.from_user
@@ -18,7 +18,24 @@ async def handle_karma(message: Message, store: DataStore):
     if text.isdigit() or (text.startswith("+") and text[1:].isdigit()):
         value = int(text.replace("+", ""))
         new_karma = store.add_karma(target_user.id, value)
-    elif text.startswith("-") and text[1:].isdigit():
+    else:
+        return
+    store.set_karma(target_user.id, new_karma)
+    await message.reply(
+        f"⚖️ Карма користувача {target_user.full_name}: <b>{new_karma}</b>\n"
+        f"(Максимум: 1000 | Мінімум: -1000)"
+    )
+
+
+@karma_router.message(F.text.startswith("-"), F.reply_to_message)
+async def handle_karma_minus(message: Message, store: DataStore):
+    if not message.reply_to_message:
+        return
+    target_user = message.reply_to_message.from_user
+    text = (message.text or "").strip()
+    if not text:
+        return
+    if text.startswith("-") and text[1:].isdigit():
         value = int(text)
         new_karma = store.add_karma(target_user.id, value)
     else:
