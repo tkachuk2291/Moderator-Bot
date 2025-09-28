@@ -14,7 +14,6 @@ from ..utils.parse import parse_duration_to_seconds
 
 
 moderation_router = Router()
-store = DataStore()
 
 
 # text moderation handlers moved to text_moderation_router
@@ -43,10 +42,7 @@ async def reply_report(message: Message):
 
 
 @moderation_router.message(Command("spec", "spectator"), IsAdmin())
-from aiogram import Bot
-
-
-async def spec_user(message: Message, bot: Bot):
+async def spec_user(message: Message, bot: Bot, store: DataStore):
     if not message.reply_to_message:
         await message.reply("❗ Використай команду у відповідь на повідомлення користувача.")
         return
@@ -98,7 +94,7 @@ async def unban_user(message: Message, bot: Bot):
 
 
 @moderation_router.message(Command("ban"))
-async def ban_user(message: Message, command: CommandObject, bot: Bot):
+async def ban_user(message: Message, command: CommandObject, bot: Bot, store: DataStore):
     if not message.reply_to_message:
         await message.reply("❗ Використай: /ban <час або перманентний>, причина (у відповідь на повідомлення)")
         return
@@ -142,7 +138,7 @@ async def ban_user(message: Message, command: CommandObject, bot: Bot):
 
 
 @moderation_router.message(Command("mute"))
-async def mute_user(message: Message, command: CommandObject, bot: Bot):
+async def mute_user(message: Message, command: CommandObject, bot: Bot, store: DataStore):
     if not message.reply_to_message:
         await message.reply("❗ Використай: /mute <час>, причина (у відповідь на повідомлення)")
         return
@@ -208,7 +204,7 @@ async def unmute_user(message: Message, bot: Bot):
 
 
 @moderation_router.message(Command("kick"))
-async def kick_user(message: Message, bot: Bot):
+async def kick_user(message: Message, bot: Bot, store: DataStore):
     if not message.reply_to_message:
         await message.reply("❗ Використай команду у відповідь на повідомлення користувача.")
         return
@@ -238,7 +234,7 @@ async def kick_user(message: Message, bot: Bot):
 
 
 @moderation_router.message(Command("warn"), IsAdmin())
-async def warn_user(message: Message, command: CommandObject):
+async def warn_user(message: Message, command: CommandObject, store: DataStore):
     if not message.reply_to_message:
         await message.reply("❗ Використай команду у відповідь на повідомлення користувача.")
         return
@@ -259,7 +255,7 @@ async def warn_user(message: Message, command: CommandObject):
 
 
 @moderation_router.message(Command("unwarn"), IsAdmin())
-async def unwarn_user(message: Message):
+async def unwarn_user(message: Message, store: DataStore):
     args = message.text.split()
     if message.reply_to_message:
         target_user = message.reply_to_message.from_user
