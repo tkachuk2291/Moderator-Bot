@@ -84,7 +84,7 @@ async def spec_user(message: Message, bot: Bot, store: DataStore):
         f"<b>👤 Інформація про користувача:</b>\n"
         f"📝 Ім'я: {user_name}\n"
         f"🏷 Статус: {role}\n"
-        f"⚖️ Карма: {}"
+        f"⚖️ Карма: {karma}"
         f"🆔 ID: {user_id}\n"
     )
 
