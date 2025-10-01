@@ -1,1 +1,1 @@
-from bot.filters import AntiMat, AntiBegger, IsAdmin  # Compatibility shim
+from filters import AntiMat, AntiBegger, IsAdmin  # Compatibility shim
