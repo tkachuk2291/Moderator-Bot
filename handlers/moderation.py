@@ -10,7 +10,6 @@ from aiogram.filters.command import CommandObject
 from filters import IsAdmin
 from data_store import DataStore, HistoryEntry, store
 from utils.parse import parse_duration_to_seconds
-from karma 
 
 moderation_router = Router()
 
@@ -76,16 +75,16 @@ async def spec_user(message: Message, bot: Bot, store: DataStore):
     target_user = message.reply_to_message.from_user
     user_id = str(target_user.id)
     user_name = target_user.full_name
-
+    karma = store.get_karma(user_id, True)
     chat_member = await bot.get_chat_member(chat_id=message.chat.id, user_id=target_user.id)
     status = chat_member.status
     role = "Адміністратор" if status in ["creator", "administrator"] else "Учасник"
-
+    
     info_text = (
         f"<b>👤 Інформація про користувача:</b>\n"
         f"📝 Ім'я: {user_name}\n"
         f"🏷 Статус: {role}\n"
-        f"⚖️ Карма: {}"
+        f"⚖️ Карма: {karma}"
         f"🆔 ID: {user_id}\n"
     )
 
